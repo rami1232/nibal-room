@@ -1,0 +1,8 @@
+{
+  "name": "nibal-room",
+  "version": "1.0.0",
+  "description": "Interactive 3D classroom arrangement game",
+  "scripts": {
+    "start": "npx serve public -l $PORT -s"
+  }
+}

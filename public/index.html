@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classroom Arrangement</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;height:100vh;overflow:hidden;user-select:none}
+.app{display:flex;height:100vh}
+
+/* Sidebar */
+.sidebar{width:240px;background:#16213e;border-right:2px solid #0f3460;display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:14px;background:#0f3460;text-align:center}
+.sidebar-header h2{font-size:15px;color:#e94560;letter-spacing:1px;text-transform:uppercase}
+.sidebar-header p{font-size:11px;color:#8899aa;margin-top:3px}
+.item-list{flex:1;overflow-y:auto;padding:6px}
+.item-list::-webkit-scrollbar{width:5px}
+.item-list::-webkit-scrollbar-thumb{background:#0f3460;border-radius:3px}
+.sidebar-item{display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:3px;background:#1a1a2e;border:1px solid #0f3460;border-radius:6px;cursor:grab;transition:all .15s}
+.sidebar-item:hover{background:#0f3460;border-color:#e94560;transform:translateX(3px)}
+.sidebar-item .icon{font-size:22px;width:32px;text-align:center;flex-shrink:0}
+.sidebar-item .info{flex:1;min-width:0}
+.sidebar-item .name{font-size:12px;font-weight:600;color:#eee}
+.sidebar-item .qty{font-size:10px;color:#8899aa}
+.sidebar-item .badge{background:#e94560;color:#fff;font-size:10px;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sidebar-item.placed .badge{background:#2ecc71}
+.sidebar-item.all-placed{opacity:.4;pointer-events:none}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#16213e;border-bottom:2px solid #0f3460;flex-shrink:0}
+.toolbar .title{font-size:16px;font-weight:700;color:#e94560}
+.toolbar-actions{display:flex;gap:6px}
+.btn{padding:6px 14px;border:1px solid #0f3460;background:#1a1a2e;color:#ccc;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s}
+.btn:hover{background:#0f3460;color:#fff;border-color:#e94560}
+.progress-bar{display:flex;align-items:center;gap:6px;font-size:11px;color:#8899aa}
+.progress-track{width:100px;height:5px;background:#0f3460;border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:#e94560;border-radius:3px;transition:width .3s}
+
+/* 3D Room */
+.room-container{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.scene{position:relative;width:960px;height:580px;overflow:hidden;border-radius:6px;background:#87CEEB}
+
+/* Sky / ceiling area */
+.scene::before{content:'';position:absolute;top:0;left:0;right:0;height:100%;background:linear-gradient(180deg,#87CEEB 0%,#b0d4f1 30%,#f5e6c8 30%);pointer-events:none;z-index:0}
+
+/* Back wall */
+.back-wall{position:absolute;z-index:1}
+
+/* Floor */
+.floor-area{position:absolute;z-index:2}
+
+/* The room is drawn on a canvas behind everything */
+.room-canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+
+/* Drop zones */
+.drop-zone{position:absolute;z-index:5}
+.drop-floor{top:175px;left:120px;width:720px;height:390px;clip-path:polygon(0% 0%, 100% 0%, 130% 120%, -30% 120%)}
+.drop-wall{top:20px;left:170px;width:620px;height:160px}
+
+/* Items in room */
+.room-item{position:absolute;z-index:10;cursor:grab;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:filter .15s;transform-origin:bottom center}
+.room-item:hover{z-index:100;filter:brightness(1.15) drop-shadow(0 0 8px rgba(233,69,96,.6))}
+.room-item.dragging{opacity:.85;z-index:200;cursor:grabbing;filter:brightness(1.2) drop-shadow(0 0 12px rgba(233,69,96,.8))}
+.room-item .item-label{font-size:0;pointer-events:none}
+.room-item .delete-btn{position:absolute;top:-6px;right:-6px;width:16px;height:16px;background:#c0392b;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;z-index:11}
+.room-item:hover .delete-btn{display:flex}
+
+/* Context menu */
+.ctx-menu{position:fixed;background:#16213e;border:1px solid #0f3460;border-radius:6px;padding:3px;z-index:10000;min-width:130px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.ctx-menu button{display:block;width:100%;padding:7px 10px;border:none;background:none;color:#ccc;font-size:11px;text-align:left;cursor:pointer;border-radius:3px}
+.ctx-menu button:hover{background:#0f3460;color:#fff}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f3460;color:#fff;padding:8px 20px;border-radius:6px;font-size:12px;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.4);transition:opacity .3s}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>Classroom Items</h2>
+      <p>Drag items into the room</p>
+    </div>
+    <div class="item-list" id="itemList"></div>
+  </div>
+  <div class="main">
+    <div class="toolbar">
+      <span class="title">Classroom Arrangement</span>
+      <div class="progress-bar">
+        <span id="progressText">0/0</span>
+        <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn" onclick="resetRoom()">Reset</button>
+        <button class="btn" onclick="saveLayout()">Save</button>
+        <button class="btn" onclick="loadLayout()">Load</button>
+      </div>
+    </div>
+    <div class="room-container">
+      <div class="scene" id="scene">
+        <canvas class="room-canvas" id="roomCanvas" width="960" height="580"></canvas>
+        <!-- Invisible drop zones -->
+        <div class="drop-zone drop-floor" id="dropFloor"></div>
+        <div class="drop-zone drop-wall" id="dropWall"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Room geometry (perspective) ───
+const W = 960, H = 580;
+// Vanishing point
+const VP = { x: W / 2, y: H * 0.30 };
+// Back wall corners (the rectangle we see head-on)
+const BW = {
+  tl: { x: 170, y: 20 },
+  tr: { x: 790, y: 20 },
+  br: { x: 790, y: 175 },
+  bl: { x: 170, y: 175 }
+};
+// Room front edges (viewport edges)
+const FR = {
+  bl: { x: 0, y: H },
+  br: { x: W, y: H },
+  tl: { x: 0, y: 175 },
+  tr: { x: W, y: 175 }
+};
+
+// Draw the room
+function drawRoom() {
+  const c = document.getElementById('roomCanvas');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Back wall ──
+  ctx.fillStyle = '#f0e0c0';
+  ctx.fillRect(BW.tl.x, BW.tl.y, BW.tr.x - BW.tl.x, BW.bl.y - BW.tl.y);
+  // Wall border
+  ctx.strokeStyle = '#c4a87a';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(BW.tl.x, BW.tl.y, BW.tr.x - BW.tl.x, BW.bl.y - BW.tl.y);
+
+  // ── Floor ──
+  ctx.fillStyle = '#d4b896';
+  ctx.beginPath();
+  ctx.moveTo(BW.bl.x, BW.bl.y);
+  ctx.lineTo(BW.br.x, BW.br.y);
+  ctx.lineTo(FR.br.x, FR.br.y);
+  ctx.lineTo(FR.bl.x, FR.bl.y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Floor planks
+  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+  ctx.lineWidth = 1;
+  const numPlanks = 14;
+  for (let i = 1; i < numPlanks; i++) {
+    const t = i / numPlanks;
+    const topX = BW.bl.x + t * (BW.br.x - BW.bl.x);
+    const botX = FR.bl.x + t * (FR.br.x - FR.bl.x);
+    ctx.beginPath();
+    ctx.moveTo(topX, BW.bl.y);
+    ctx.lineTo(botX, FR.bl.y);
+    ctx.stroke();
+  }
+  // Horizontal floor lines (depth)
+  for (let i = 1; i <= 8; i++) {
+    const t = i / 9;
+    const y = BW.bl.y + t * (FR.bl.y - BW.bl.y);
+    const leftX = lerp(BW.bl.x, FR.bl.x, t);
+    const rightX = lerp(BW.br.x, FR.br.x, t);
+    ctx.beginPath();
+    ctx.moveTo(leftX, y);
+    ctx.lineTo(rightX, y);
+    ctx.stroke();
+  }
+
+  // ── Left wall ──
+  ctx.fillStyle = '#e8d5b5';
+  ctx.beginPath();
+  ctx.moveTo(BW.tl.x, BW.tl.y);
+  ctx.lineTo(FR.tl.x, FR.tl.y - 155);
+  ctx.lineTo(FR.bl.x, FR.bl.y);
+  ctx.lineTo(BW.bl.x, BW.bl.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#c4a87a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // ── Right wall ──
+  ctx.fillStyle = '#dcc9a5';
+  ctx.beginPath();
+  ctx.moveTo(BW.tr.x, BW.tr.y);
+  ctx.lineTo(FR.tr.x, FR.tr.y - 155);
+  ctx.lineTo(FR.br.x, FR.br.y);
+  ctx.lineTo(BW.br.x, BW.br.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#c4a87a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // ── Ceiling ──
+  ctx.fillStyle = '#f5f0e8';
+  ctx.beginPath();
+  ctx.moveTo(BW.tl.x, BW.tl.y);
+  ctx.lineTo(BW.tr.x, BW.tr.y);
+  ctx.lineTo(FR.tr.x, FR.tr.y - 155);
+  ctx.lineTo(FR.tl.x, FR.tl.y - 155);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── Windows on back wall ──
+  const wallW = BW.tr.x - BW.tl.x;
+  const wallH = BW.bl.y - BW.tl.y;
+  for (let i = 0; i < 3; i++) {
+    const wx = BW.tl.x + wallW * 0.1 + i * (wallW * 0.3);
+    const wy = BW.tl.y + wallH * 0.1;
+    const ww = wallW * 0.2;
+    const wh = wallH * 0.55;
+    // Window frame
+    ctx.fillStyle = '#a0d8ef';
+    ctx.fillRect(wx, wy, ww, wh);
+    // Glass shine
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(wx + 2, wy + 2, ww * 0.45, wh - 4);
+    // Frame
+    ctx.strokeStyle = '#8B7355';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(wx, wy, ww, wh);
+    // Cross bar
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(wx + ww / 2, wy);
+    ctx.lineTo(wx + ww / 2, wy + wh);
+    ctx.moveTo(wx, wy + wh / 2);
+    ctx.lineTo(wx + ww, wy + wh / 2);
+    ctx.stroke();
+  }
+
+  // ── Door on left wall ──
+  const dx = 30, dy = 60;
+  const dw = 55, dh = 110;
+  // Map to left wall perspective
+  const dt = 0.3;
+  const doorBL = { x: lerp(BW.bl.x, FR.bl.x, dt), y: lerp(BW.bl.y, FR.bl.y, dt) };
+  const doorTL = { x: doorBL.x - 12, y: doorBL.y - dh };
+  const dt2 = 0.12;
+  const doorBR = { x: lerp(BW.bl.x, FR.bl.x, dt2), y: lerp(BW.bl.y, FR.bl.y, dt2) };
+  const doorTR = { x: doorBR.x - 5, y: doorBR.y - dh + 8 };
+
+  ctx.fillStyle = '#8B6914';
+  ctx.beginPath();
+  ctx.moveTo(doorTL.x, doorTL.y);
+  ctx.lineTo(doorTR.x, doorTR.y);
+  ctx.lineTo(doorBR.x, doorBR.y);
+  ctx.lineTo(doorBL.x, doorBL.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#6b4f0e';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Door knob
+  ctx.fillStyle = '#DAA520';
+  ctx.beginPath();
+  ctx.arc(doorTL.x + 8, (doorTL.y + doorBL.y) / 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ── Baseboard ──
+  ctx.strokeStyle = '#a08050';
+  ctx.lineWidth = 4;
+  // Back wall baseboard
+  ctx.beginPath();
+  ctx.moveTo(BW.bl.x, BW.bl.y);
+  ctx.lineTo(BW.br.x, BW.br.y);
+  ctx.stroke();
+
+  // ── Floor edge highlight ──
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(BW.bl.x, BW.bl.y);
+  ctx.lineTo(FR.bl.x, FR.bl.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(BW.br.x, BW.br.y);
+  ctx.lineTo(FR.br.x, FR.br.y);
+  ctx.stroke();
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ─── Item definitions ───
+const ITEMS = [
+  { id:'round-table',    name:'Round Table',      icon:'🟤',qty:2, zone:'floor',w:60,h:50 },
+  { id:'rect-table',     name:'Rect. Table',      icon:'🟫',qty:2, zone:'floor',w:80,h:45 },
+  { id:'chair',          name:'Chair',             icon:'🪑',qty:10,zone:'floor',w:28,h:34 },
+  { id:'carpet',         name:'Carpet',            icon:'🟪',qty:2, zone:'floor',w:90,h:50 },
+  { id:'cabinet',        name:'Cabinet',           icon:'🗄️',qty:1, zone:'floor',w:55,h:50 },
+  { id:'poster',         name:'Wall Poster',       icon:'📋',qty:4, zone:'wall', w:65,h:45 },
+  { id:'reading-cabinet',name:'Reading Cabinet',   icon:'📚',qty:1, zone:'floor',w:65,h:55 },
+  { id:'laptop',         name:'Laptop',            icon:'💻',qty:3, zone:'floor',w:32,h:26 },
+  { id:'building-box',   name:'Building Box',      icon:'🧱',qty:1, zone:'floor',w:48,h:40 },
+  { id:'minimarket',     name:'Mini Market',       icon:'🏪',qty:1, zone:'floor',w:75,h:60 },
+  { id:'reading-tent',   name:'Reading Tent',      icon:'⛺',qty:1, zone:'floor',w:70,h:65 },
+  { id:'science-kit',    name:'Science Kit',       icon:'🔬',qty:1, zone:'floor',w:45,h:38 },
+  { id:'clock',          name:'Clock',             icon:'🕐',qty:1, zone:'wall', w:36,h:36 },
+  { id:'art-kit',        name:'Art Kit',           icon:'🎨',qty:1, zone:'floor',w:45,h:38 },
+  { id:'flipchart',      name:'Flipchart',         icon:'📊',qty:1, zone:'floor',w:45,h:55 },
+];
+
+let placedCounts = {};
+let nextUid = 1;
+ITEMS.forEach(i => placedCounts[i.id] = 0);
+
+const scene = document.getElementById('scene');
+const dropFloor = document.getElementById('dropFloor');
+const dropWall = document.getElementById('dropWall');
+
+// ─── Depth-based scaling for floor items ───
+// Y goes from BW.bl.y (back, depth=0) to H (front, depth=1)
+function depthFromY(y) {
+  return Math.max(0, Math.min(1, (y - BW.bl.y) / (H - BW.bl.y)));
+}
+
+function scaleFromDepth(d) {
+  return 0.45 + d * 0.75; // 0.45 at back wall, 1.2 at front
+}
+
+function applyDepthScale(el) {
+  const top = parseFloat(el.style.top);
+  const h = parseFloat(el.dataset.baseH);
+  const bottomY = top + h;
+  const d = depthFromY(bottomY);
+  const s = scaleFromDepth(d);
+  el.style.transform = `scale(${s.toFixed(3)})`;
+  el.style.zIndex = Math.floor(10 + d * 80);
+}
+
+// ─── Draw SVG icons for items ───
+function drawItem(def) {
+  const id = def.id;
+  switch(id) {
+    case 'round-table': return `<svg viewBox="0 0 60 50" width="100%" height="100%">
+      <ellipse cx="30" cy="28" rx="28" ry="18" fill="#deb887" stroke="#a08050" stroke-width="2"/>
+      <ellipse cx="30" cy="25" rx="28" ry="18" fill="#e8cc9c" stroke="#a08050" stroke-width="2"/>
+      </svg>`;
+    case 'rect-table': return `<svg viewBox="0 0 80 45" width="100%" height="100%">
+      <rect x="2" y="12" width="76" height="28" rx="2" fill="#deb887" stroke="#a08050" stroke-width="2"/>
+      <rect x="2" y="8" width="76" height="28" rx="2" fill="#e8cc9c" stroke="#a08050" stroke-width="2"/>
+      <line x1="8" y1="36" x2="8" y2="44" stroke="#8B6914" stroke-width="3"/>
+      <line x1="72" y1="36" x2="72" y2="44" stroke="#8B6914" stroke-width="3"/>
+      </svg>`;
+    case 'chair': return `<svg viewBox="0 0 28 34" width="100%" height="100%">
+      <rect x="3" y="0" width="22" height="16" rx="2" fill="#cd5c5c" stroke="#8b3a3a" stroke-width="1.5"/>
+      <rect x="4" y="16" width="20" height="10" rx="1" fill="#b84545" stroke="#8b3a3a" stroke-width="1.5"/>
+      <line x1="6" y1="26" x2="6" y2="33" stroke="#8B6914" stroke-width="2"/>
+      <line x1="22" y1="26" x2="22" y2="33" stroke="#8B6914" stroke-width="2"/>
+      </svg>`;
+    case 'carpet': return `<svg viewBox="0 0 90 50" width="100%" height="100%">
+      <rect x="2" y="2" width="86" height="46" rx="4" fill="#9b59b6" stroke="#7d3c98" stroke-width="2" opacity=".85"/>
+      <rect x="10" y="8" width="70" height="34" rx="2" fill="none" stroke="#c39bd3" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <circle cx="45" cy="25" r="8" fill="none" stroke="#c39bd3" stroke-width="1"/>
+      </svg>`;
+    case 'cabinet': return `<svg viewBox="0 0 55 50" width="100%" height="100%">
+      <rect x="2" y="2" width="51" height="46" rx="2" fill="#8B6914" stroke="#5a3e0b" stroke-width="2"/>
+      <line x1="2" y1="25" x2="53" y2="25" stroke="#5a3e0b" stroke-width="1.5"/>
+      <circle cx="27" cy="14" r="2" fill="#DAA520"/>
+      <circle cx="27" cy="36" r="2" fill="#DAA520"/>
+      </svg>`;
+    case 'poster': return `<svg viewBox="0 0 65 45" width="100%" height="100%">
+      <rect x="2" y="2" width="61" height="41" rx="1" fill="#f9f6f0" stroke="#bbb" stroke-width="2"/>
+      <line x1="10" y1="12" x2="55" y2="12" stroke="#ccc" stroke-width="1.5"/>
+      <line x1="10" y1="18" x2="50" y2="18" stroke="#ccc" stroke-width="1.5"/>
+      <line x1="10" y1="24" x2="55" y2="24" stroke="#ccc" stroke-width="1.5"/>
+      <line x1="10" y1="30" x2="42" y2="30" stroke="#ccc" stroke-width="1.5"/>
+      <rect x="6" y="6" width="8" height="8" rx="1" fill="#e94560" opacity=".5"/>
+      </svg>`;
+    case 'reading-cabinet': return `<svg viewBox="0 0 65 55" width="100%" height="100%">
+      <rect x="2" y="2" width="61" height="51" rx="2" fill="#5d4037" stroke="#3e2723" stroke-width="2"/>
+      <rect x="6" y="6" width="53" height="12" rx="1" fill="#6d4c41"/>
+      <rect x="6" y="20" width="53" height="12" rx="1" fill="#6d4c41"/>
+      <rect x="6" y="34" width="53" height="12" rx="1" fill="#6d4c41"/>
+      <rect x="10" y="7" width="5" height="10" rx="1" fill="#e74c3c"/>
+      <rect x="16" y="7" width="4" height="10" rx="1" fill="#3498db"/>
+      <rect x="21" y="7" width="5" height="10" rx="1" fill="#2ecc71"/>
+      <rect x="27" y="7" width="4" height="10" rx="1" fill="#f39c12"/>
+      <rect x="10" y="21" width="5" height="10" rx="1" fill="#9b59b6"/>
+      <rect x="16" y="21" width="6" height="10" rx="1" fill="#1abc9c"/>
+      <rect x="23" y="21" width="4" height="10" rx="1" fill="#e67e22"/>
+      </svg>`;
+    case 'laptop': return `<svg viewBox="0 0 32 26" width="100%" height="100%">
+      <rect x="3" y="1" width="26" height="17" rx="2" fill="#444" stroke="#222" stroke-width="1.5"/>
+      <rect x="5" y="3" width="22" height="13" rx="1" fill="#1a1a2e"/>
+      <rect x="1" y="18" width="30" height="6" rx="2" fill="#666" stroke="#444" stroke-width="1"/>
+      </svg>`;
+    case 'building-box': return `<svg viewBox="0 0 48 40" width="100%" height="100%">
+      <rect x="2" y="8" width="44" height="30" rx="3" fill="#f39c12" stroke="#d35400" stroke-width="2"/>
+      <rect x="8" y="2" width="12" height="10" rx="1" fill="#e74c3c"/>
+      <rect x="22" y="4" width="8" height="8" rx="1" fill="#3498db"/>
+      <rect x="32" y="6" width="10" height="6" rx="1" fill="#2ecc71"/>
+      </svg>`;
+    case 'minimarket': return `<svg viewBox="0 0 75 60" width="100%" height="100%">
+      <rect x="2" y="10" width="71" height="48" rx="3" fill="#27ae60" stroke="#196f3d" stroke-width="2"/>
+      <rect x="2" y="2" width="71" height="14" rx="3" fill="#1e8449" stroke="#196f3d" stroke-width="2"/>
+      <text x="37" y="13" text-anchor="middle" font-size="8" font-weight="bold" fill="#fff">MARKET</text>
+      <rect x="8" y="18" width="14" height="16" rx="1" fill="#f9e79f" stroke="#f4d03f" stroke-width="1"/>
+      <rect x="26" y="18" width="14" height="16" rx="1" fill="#aed6f1" stroke="#5dade2" stroke-width="1"/>
+      <rect x="44" y="18" width="14" height="16" rx="1" fill="#f5cba7" stroke="#eb984e" stroke-width="1"/>
+      <rect x="8" y="38" width="20" height="14" rx="1" fill="#d5f5e3" stroke="#82e0aa" stroke-width="1"/>
+      <rect x="32" y="38" width="20" height="14" rx="1" fill="#fadbd8" stroke="#f1948a" stroke-width="1"/>
+      </svg>`;
+    case 'reading-tent': return `<svg viewBox="0 0 70 65" width="100%" height="100%">
+      <polygon points="35,2 68,62 2,62" fill="#e74c3c" stroke="#c0392b" stroke-width="2"/>
+      <polygon points="35,2 55,62 15,62" fill="#c0392b" opacity=".4"/>
+      <rect x="22" y="38" width="26" height="24" rx="2" fill="#8B4513" opacity=".7"/>
+      <ellipse cx="35" cy="52" rx="8" ry="10" fill="#2c1810"/>
+      </svg>`;
+    case 'science-kit': return `<svg viewBox="0 0 45 38" width="100%" height="100%">
+      <rect x="2" y="2" width="41" height="34" rx="3" fill="#3498db" stroke="#1f6fa5" stroke-width="2"/>
+      <circle cx="14" cy="15" r="6" fill="none" stroke="#ecf0f1" stroke-width="1.5"/>
+      <line x1="14" y1="9" x2="14" y2="5" stroke="#ecf0f1" stroke-width="1.5"/>
+      <rect x="26" y="8" width="3" height="14" rx="1" fill="#ecf0f1"/>
+      <rect x="31" y="12" width="3" height="10" rx="1" fill="#a8e6cf"/>
+      <ellipse cx="22" cy="30" rx="12" ry="3" fill="rgba(255,255,255,.15)"/>
+      </svg>`;
+    case 'clock': return `<svg viewBox="0 0 36 36" width="100%" height="100%">
+      <circle cx="18" cy="18" r="16" fill="#fff" stroke="#333" stroke-width="2"/>
+      <circle cx="18" cy="18" r="14" fill="#fafafa"/>
+      <line x1="18" y1="18" x2="18" y2="8" stroke="#333" stroke-width="2" stroke-linecap="round"/>
+      <line x1="18" y1="18" x2="26" y2="18" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="18" cy="18" r="1.5" fill="#e94560"/>
+      <text x="18" y="6" text-anchor="middle" font-size="4" fill="#333">12</text>
+      <text x="31" y="20" text-anchor="middle" font-size="4" fill="#333">3</text>
+      <text x="18" y="33" text-anchor="middle" font-size="4" fill="#333">6</text>
+      <text x="5" y="20" text-anchor="middle" font-size="4" fill="#333">9</text>
+      </svg>`;
+    case 'art-kit': return `<svg viewBox="0 0 45 38" width="100%" height="100%">
+      <rect x="2" y="2" width="41" height="34" rx="3" fill="#e91e63" stroke="#ad1457" stroke-width="2"/>
+      <circle cx="12" cy="14" r="4" fill="#f44336"/>
+      <circle cx="22" cy="12" r="4" fill="#2196f3"/>
+      <circle cx="32" cy="14" r="4" fill="#ffeb3b"/>
+      <circle cx="17" cy="22" r="4" fill="#4caf50"/>
+      <circle cx="27" cy="22" r="4" fill="#ff9800"/>
+      <rect x="10" y="28" width="25" height="4" rx="1" fill="#f8bbd0"/>
+      </svg>`;
+    case 'flipchart': return `<svg viewBox="0 0 45 55" width="100%" height="100%">
+      <line x1="10" y1="50" x2="22" y2="5" stroke="#8B6914" stroke-width="3"/>
+      <line x1="35" y1="50" x2="23" y2="5" stroke="#8B6914" stroke-width="3"/>
+      <rect x="6" y="3" width="33" height="30" rx="2" fill="#f9f6f0" stroke="#999" stroke-width="2"/>
+      <line x1="12" y1="10" x2="33" y2="10" stroke="#ddd" stroke-width="1"/>
+      <line x1="12" y1="15" x2="33" y2="15" stroke="#ddd" stroke-width="1"/>
+      <line x1="12" y1="20" x2="33" y2="20" stroke="#ddd" stroke-width="1"/>
+      <line x1="12" y1="25" x2="28" y2="25" stroke="#ddd" stroke-width="1"/>
+      </svg>`;
+    default: return `<span style="font-size:24px">${def.icon}</span>`;
+  }
+}
+
+// ─── Build sidebar ───
+function buildSidebar() {
+  const list = document.getElementById('itemList');
+  list.innerHTML = '';
+  ITEMS.forEach(item => {
+    const rem = item.qty - (placedCounts[item.id] || 0);
+    const el = document.createElement('div');
+    el.className = 'sidebar-item' + (rem <= 0 ? ' all-placed' : (placedCounts[item.id] > 0 ? ' placed' : ''));
+    el.draggable = true;
+    el.dataset.itemId = item.id;
+    el.innerHTML = `<span class="icon">${item.icon}</span><div class="info"><div class="name">${item.name}</div><div class="qty">${rem} of ${item.qty} left</div></div><span class="badge">${rem}</span>`;
+    el.addEventListener('dragstart', onDragStart);
+    list.appendChild(el);
+  });
+}
+
+function updateProgress() {
+  const total = ITEMS.reduce((s,i) => s+i.qty, 0);
+  const placed = Object.values(placedCounts).reduce((s,c) => s+c, 0);
+  document.getElementById('progressText').textContent = `${placed}/${total}`;
+  document.getElementById('progressFill').style.width = `${(placed/total)*100}%`;
+}
+
+// ─── Drag from sidebar ───
+let dragInfo = null;
+
+function onDragStart(e) {
+  const def = ITEMS.find(i => i.id === e.currentTarget.dataset.itemId);
+  if (!def) return;
+  dragInfo = def;
+  e.dataTransfer.effectAllowed = 'copy';
+  // Tiny transparent image so browser doesn't show ugly ghost
+  const img = document.createElement('canvas');
+  img.width = 1; img.height = 1;
+  e.dataTransfer.setDragImage(img, 0, 0);
+}
+
+// Drop on floor
+dropFloor.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+dropFloor.addEventListener('drop', e => {
+  e.preventDefault();
+  if (!dragInfo) return;
+  const def = dragInfo;
+  dragInfo = null;
+  if (def.qty - (placedCounts[def.id]||0) <= 0) return;
+  const rect = scene.getBoundingClientRect();
+  const sx = scene.offsetWidth / rect.width;
+  const sy = scene.offsetHeight / rect.height;
+  const x = (e.clientX - rect.left) * sx;
+  const y = (e.clientY - rect.top) * sy;
+  placeItem(def, x, y, 'floor');
+});
+
+// Drop on wall
+dropWall.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+dropWall.addEventListener('drop', e => {
+  e.preventDefault();
+  if (!dragInfo) return;
+  const def = dragInfo;
+  dragInfo = null;
+  if (def.qty - (placedCounts[def.id]||0) <= 0) return;
+  const rect = scene.getBoundingClientRect();
+  const sx = scene.offsetWidth / rect.width;
+  const sy = scene.offsetHeight / rect.height;
+  const x = (e.clientX - rect.left) * sx;
+  const y = (e.clientY - rect.top) * sy;
+  placeItem(def, x, y, 'wall');
+});
+
+document.addEventListener('dragend', () => { dragInfo = null; });
+
+// ─── Place item ───
+function placeItem(def, x, y, zone, skipCount) {
+  const uid = nextUid++;
+  const el = document.createElement('div');
+  el.className = 'room-item';
+  el.dataset.uid = uid;
+  el.dataset.itemId = def.id;
+  el.dataset.zone = zone;
+  el.dataset.baseW = def.w;
+  el.dataset.baseH = def.h;
+  el.style.width = def.w + 'px';
+  el.style.height = def.h + 'px';
+  el.style.left = (x - def.w / 2) + 'px';
+  el.style.top = (y - def.h / 2) + 'px';
+
+  el.innerHTML = `<div style="width:100%;height:100%;pointer-events:none">${drawItem(def)}</div><button class="delete-btn" title="Remove">&times;</button>`;
+
+  el.querySelector('.delete-btn').addEventListener('mousedown', e => {
+    e.stopPropagation();
+    removeItem(el);
+  });
+
+  el.addEventListener('contextmenu', e => { e.preventDefault(); showCtx(e, el); });
+
+  if (zone === 'floor') applyDepthScale(el);
+  else el.style.zIndex = 8; // wall items behind floor items
+
+  setupDrag(el);
+  scene.appendChild(el);
+
+  if (!skipCount) {
+    placedCounts[def.id] = (placedCounts[def.id]||0) + 1;
+    buildSidebar();
+    updateProgress();
+  }
+  return el;
+}
+
+// ─── Drag items inside scene ───
+function setupDrag(el) {
+  let dragging = false, sx, sy, ox, oy;
+
+  el.addEventListener('mousedown', e => {
+    if (e.target.closest('.delete-btn')) return;
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true;
+    el.classList.add('dragging');
+    const rect = scene.getBoundingClientRect();
+    const scX = scene.offsetWidth / rect.width;
+    const scY = scene.offsetHeight / rect.height;
+    sx = e.clientX; sy = e.clientY;
+    ox = parseFloat(el.style.left); oy = parseFloat(el.style.top);
+
+    const onMove = e => {
+      if (!dragging) return;
+      const r = scene.getBoundingClientRect();
+      const scX2 = scene.offsetWidth / r.width;
+      const scY2 = scene.offsetHeight / r.height;
+      let nx = ox + (e.clientX - sx) * scX2;
+      let ny = oy + (e.clientY - sy) * scY2;
+      nx = Math.max(0, Math.min(nx, W - 20));
+      ny = Math.max(0, Math.min(ny, H - 20));
+      el.style.left = nx + 'px';
+      el.style.top = ny + 'px';
+      if (el.dataset.zone === 'floor') applyDepthScale(el);
+    };
+
+    const onUp = () => {
+      dragging = false;
+      el.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+// ─── Remove ───
+function removeItem(el) {
+  const itemId = el.dataset.itemId;
+  el.remove();
+  placedCounts[itemId] = Math.max(0, (placedCounts[itemId]||0) - 1);
+  buildSidebar();
+  updateProgress();
+}
+
+// ─── Context menu ───
+let ctxMenu = null;
+function showCtx(e, el) {
+  closeCtx();
+  const m = document.createElement('div');
+  m.className = 'ctx-menu';
+  m.style.left = e.clientX + 'px';
+  m.style.top = e.clientY + 'px';
+  m.innerHTML = `<button data-a="front">Bring to Front</button><button data-a="back">Send to Back</button><button data-a="del">Remove</button>`;
+  m.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.a === 'front') el.style.zIndex = 150;
+    else if (b.dataset.a === 'back') el.style.zIndex = 3;
+    else if (b.dataset.a === 'del') removeItem(el);
+    closeCtx();
+  }));
+  document.body.appendChild(m);
+  ctxMenu = m;
+}
+function closeCtx() { if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; } }
+document.addEventListener('click', closeCtx);
+
+// ─── Reset / Save / Load ───
+function resetRoom() {
+  scene.querySelectorAll('.room-item').forEach(e => e.remove());
+  ITEMS.forEach(i => placedCounts[i.id] = 0);
+  buildSidebar();
+  updateProgress();
+}
+
+function saveLayout() {
+  const data = [];
+  scene.querySelectorAll('.room-item').forEach(el => {
+    data.push({ itemId: el.dataset.itemId, x: parseFloat(el.style.left), y: parseFloat(el.style.top), zone: el.dataset.zone });
+  });
+  localStorage.setItem('classroom-3d', JSON.stringify(data));
+  toast('Layout saved!');
+}
+
+function loadLayout() {
+  const raw = localStorage.getItem('classroom-3d');
+  if (!raw) { toast('No saved layout'); return; }
+  resetRoom();
+  JSON.parse(raw).forEach(d => {
+    const def = ITEMS.find(i => i.id === d.itemId);
+    if (!def || def.qty - (placedCounts[def.id]||0) <= 0) return;
+    const w = def.w, h = def.h;
+    const el = placeItem(def, d.x + w/2, d.y + h/2, d.zone || 'floor');
+    el.style.left = d.x + 'px';
+    el.style.top = d.y + 'px';
+    if (el.dataset.zone === 'floor') applyDepthScale(el);
+  });
+  toast('Layout loaded!');
+}
+
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; }, 1400);
+  setTimeout(() => t.remove(), 1800);
+}
+
+// ─── Init ───
+drawRoom();
+buildSidebar();
+updateProgress();
+</script>
+</body>
+</html>
