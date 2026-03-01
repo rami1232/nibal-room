@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: nibal-room
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: ./public
