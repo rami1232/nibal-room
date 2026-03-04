@@ -298,19 +298,23 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 const ITEMS = [
   { id:'round-table',    name:'Round Table',      icon:'🟤',qty:2, zone:'floor',w:60,h:50 },
   { id:'rect-table',     name:'Rect. Table',      icon:'🟫',qty:2, zone:'floor',w:80,h:45 },
-  { id:'chair',          name:'Chair',             icon:'🪑',qty:10,zone:'floor',w:28,h:34 },
-  { id:'carpet',         name:'Carpet',            icon:'🟪',qty:2, zone:'floor',w:90,h:50 },
+  { id:'chair',          name:'Chair',             icon:'🪑',qty:20,zone:'floor',w:28,h:34 },
+  { id:'carpet',         name:'Carpet',            icon:'🟪',qty:4, zone:'floor',w:90,h:50 },
   { id:'cabinet',        name:'Cabinet',           icon:'🗄️',qty:1, zone:'floor',w:55,h:50 },
   { id:'poster',         name:'Wall Poster',       icon:'📋',qty:4, zone:'wall', w:65,h:45 },
-  { id:'reading-cabinet',name:'Reading Cabinet',   icon:'📚',qty:1, zone:'floor',w:65,h:55 },
-  { id:'laptop',         name:'Laptop',            icon:'💻',qty:3, zone:'floor',w:32,h:26 },
-  { id:'building-box',   name:'Building Box',      icon:'🧱',qty:1, zone:'floor',w:48,h:40 },
+  { id:'reading-cabinet',name:'Reading Cabinet',   icon:'📚',qty:3, zone:'floor',w:65,h:55 },
+  { id:'laptop',         name:'IT Corner',         icon:'💻',qty:1, zone:'floor',w:32,h:26 },
+  { id:'building-box',   name:'Toy Land',          icon:'🧱',qty:1, zone:'floor',w:48,h:40 },
   { id:'minimarket',     name:'Mini Market',       icon:'🏪',qty:1, zone:'floor',w:75,h:60 },
   { id:'reading-tent',   name:'Reading Tent',      icon:'⛺',qty:1, zone:'floor',w:70,h:65 },
-  { id:'science-kit',    name:'Science Kit',       icon:'🔬',qty:1, zone:'floor',w:45,h:38 },
+  { id:'science-kit',    name:'Science Studio',    icon:'🔬',qty:1, zone:'floor',w:45,h:38 },
   { id:'clock',          name:'Clock',             icon:'🕐',qty:1, zone:'wall', w:36,h:36 },
-  { id:'art-kit',        name:'Art Kit',           icon:'🎨',qty:1, zone:'floor',w:45,h:38 },
+  { id:'art-kit',        name:'Art Studio',        icon:'🎨',qty:1, zone:'floor',w:45,h:38 },
   { id:'flipchart',      name:'Flipchart',         icon:'📊',qty:1, zone:'floor',w:45,h:55 },
+  { id:'drama-center',   name:'Drama Center',      icon:'🎭',qty:1, zone:'floor',w:70,h:55 },
+  { id:'interactive-panel',name:'Interactive Panel',icon:'📺',qty:1, zone:'wall', w:90,h:55 },
+  { id:'math-corner',    name:'Math Corner',       icon:'🔢',qty:1, zone:'floor',w:70,h:55 },
+  { id:'others',         name:'Others',            icon:'📦',qty:1, zone:'floor',w:70,h:55 },
 ];
 
 let placedCounts = {};
@@ -456,6 +460,44 @@ function drawItem(def) {
       <line x1="12" y1="15" x2="33" y2="15" stroke="#ddd" stroke-width="1"/>
       <line x1="12" y1="20" x2="33" y2="20" stroke="#ddd" stroke-width="1"/>
       <line x1="12" y1="25" x2="28" y2="25" stroke="#ddd" stroke-width="1"/>
+      </svg>`;
+    case 'drama-center': return `<svg viewBox="0 0 70 55" width="100%" height="100%">
+      <rect x="2" y="2" width="66" height="51" rx="4" fill="#8e44ad" stroke="#6c3483" stroke-width="2"/>
+      <circle cx="24" cy="22" r="10" fill="#f9e79f" stroke="#f4d03f" stroke-width="1.5"/>
+      <path d="M20,19 Q24,15 28,19" stroke="#333" stroke-width="1.5" fill="none"/>
+      <path d="M20,25 Q24,29 28,25" stroke="#333" stroke-width="1.5" fill="none"/>
+      <circle cx="21" cy="20" r="1.5" fill="#333"/><circle cx="27" cy="20" r="1.5" fill="#333"/>
+      <circle cx="46" cy="22" r="10" fill="#aed6f1" stroke="#5dade2" stroke-width="1.5"/>
+      <path d="M42,19 Q46,15 50,19" stroke="#333" stroke-width="1.5" fill="none"/>
+      <path d="M42,26 Q46,22 50,26" stroke="#333" stroke-width="1.5" fill="none"/>
+      <circle cx="43" cy="20" r="1.5" fill="#333"/><circle cx="49" cy="20" r="1.5" fill="#333"/>
+      <text x="35" y="47" text-anchor="middle" font-size="7" font-weight="bold" fill="#fff">DRAMA</text>
+      </svg>`;
+    case 'interactive-panel': return `<svg viewBox="0 0 90 55" width="100%" height="100%">
+      <rect x="4" y="2" width="82" height="51" rx="3" fill="#2c3e50" stroke="#1a252f" stroke-width="2"/>
+      <rect x="8" y="5" width="74" height="40" rx="2" fill="#1a1a2e"/>
+      <rect x="12" y="9" width="30" height="14" rx="2" fill="#3498db" opacity=".7"/>
+      <rect x="46" y="9" width="30" height="14" rx="2" fill="#2ecc71" opacity=".7"/>
+      <rect x="12" y="27" width="64" height="6" rx="1" fill="#ecf0f1" opacity=".3"/>
+      <rect x="12" y="35" width="40" height="6" rx="1" fill="#ecf0f1" opacity=".2"/>
+      <circle cx="45" cy="49" r="2" fill="#95a5a6"/>
+      </svg>`;
+    case 'math-corner': return `<svg viewBox="0 0 70 55" width="100%" height="100%">
+      <rect x="2" y="2" width="66" height="51" rx="4" fill="#2980b9" stroke="#1a5276" stroke-width="2"/>
+      <text x="14" y="20" font-size="14" font-weight="bold" fill="#fff">123</text>
+      <text x="42" y="20" font-size="12" fill="#f9e79f">+</text>
+      <rect x="8" y="26" width="14" height="14" rx="1" fill="#e74c3c" opacity=".8"/>
+      <circle cx="38" cy="33" r="7" fill="#f39c12" opacity=".8"/>
+      <polygon points="55,26 62,40 48,40" fill="#2ecc71" opacity=".8"/>
+      <text x="35" y="50" text-anchor="middle" font-size="6" fill="#d4efdf">MATH</text>
+      </svg>`;
+    case 'others': return `<svg viewBox="0 0 70 55" width="100%" height="100%">
+      <rect x="2" y="2" width="66" height="51" rx="4" fill="#7f8c8d" stroke="#5d6d7e" stroke-width="2"/>
+      <rect x="10" y="10" width="18" height="14" rx="2" fill="#bdc3c7"/>
+      <rect x="32" y="10" width="18" height="14" rx="2" fill="#95a5a6"/>
+      <circle cx="20" cy="38" r="8" fill="#aab7b8"/>
+      <rect x="36" y="30" width="20" height="16" rx="2" fill="#bdc3c7"/>
+      <text x="46" y="41" text-anchor="middle" font-size="8" fill="#5d6d7e">?</text>
       </svg>`;
     default: return `<span style="font-size:24px">${def.icon}</span>`;
   }
