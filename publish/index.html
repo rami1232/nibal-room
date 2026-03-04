@@ -315,6 +315,8 @@ const ITEMS = [
   { id:'interactive-panel',name:'Interactive Panel',icon:'📺',qty:1, zone:'wall', w:90,h:55 },
   { id:'math-corner',    name:'Math Corner',       icon:'🔢',qty:1, zone:'floor',w:70,h:55 },
   { id:'others',         name:'Others',            icon:'📦',qty:1, zone:'floor',w:70,h:55 },
+  { id:'makerspace',     name:'Makerspace',        icon:'🔧',qty:1, zone:'floor',w:80,h:60 },
+  { id:'media-lab',      name:'Media Lab',         icon:'🎬',qty:1, zone:'floor',w:80,h:60 },
 ];
 
 let placedCounts = {};
@@ -490,6 +492,29 @@ function drawItem(def) {
       <circle cx="38" cy="33" r="7" fill="#f39c12" opacity=".8"/>
       <polygon points="55,26 62,40 48,40" fill="#2ecc71" opacity=".8"/>
       <text x="35" y="50" text-anchor="middle" font-size="6" fill="#d4efdf">MATH</text>
+      </svg>`;
+    case 'makerspace': return `<svg viewBox="0 0 80 60" width="100%" height="100%">
+      <rect x="2" y="2" width="76" height="56" rx="4" fill="#d35400" stroke="#a04000" stroke-width="2"/>
+      <rect x="10" y="10" width="20" height="18" rx="2" fill="#f0b27a"/>
+      <rect x="14" y="14" width="4" height="14" rx="1" fill="#7f8c8d"/>
+      <rect x="20" y="12" width="6" height="8" rx="1" fill="#bdc3c7"/>
+      <circle cx="50" cy="20" r="9" fill="none" stroke="#f9e79f" stroke-width="2"/>
+      <path d="M46,16 L54,24 M54,16 L46,24" stroke="#f9e79f" stroke-width="1.5"/>
+      <rect x="10" y="34" width="26" height="4" rx="1" fill="#e67e22"/>
+      <rect x="10" y="40" width="18" height="4" rx="1" fill="#eb984e"/>
+      <rect x="42" y="34" width="28" height="16" rx="2" fill="#a04000"/>
+      <text x="56" y="45" text-anchor="middle" font-size="7" font-weight="bold" fill="#f9e79f">MAKE</text>
+      </svg>`;
+    case 'media-lab': return `<svg viewBox="0 0 80 60" width="100%" height="100%">
+      <rect x="2" y="2" width="76" height="56" rx="4" fill="#1a5276" stroke="#0e3547" stroke-width="2"/>
+      <rect x="10" y="8" width="30" height="22" rx="2" fill="#2c3e50"/>
+      <rect x="12" y="10" width="26" height="18" rx="1" fill="#1a1a2e"/>
+      <polygon points="22,15 22,23 28,19" fill="#e74c3c"/>
+      <circle cx="58" cy="18" r="10" fill="#2c3e50" stroke="#5dade2" stroke-width="1.5"/>
+      <circle cx="58" cy="18" r="4" fill="#5dade2" opacity=".5"/>
+      <rect x="10" y="36" width="60" height="6" rx="2" fill="#2e86c1" opacity=".6"/>
+      <rect x="10" y="36" width="35" height="6" rx="2" fill="#3498db"/>
+      <text x="40" y="52" text-anchor="middle" font-size="7" font-weight="bold" fill="#aed6f1">MEDIA</text>
       </svg>`;
     case 'others': return `<svg viewBox="0 0 70 55" width="100%" height="100%">
       <rect x="2" y="2" width="66" height="51" rx="4" fill="#7f8c8d" stroke="#5d6d7e" stroke-width="2"/>
