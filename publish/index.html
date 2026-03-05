@@ -29,14 +29,22 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e0e0e
 
 /* Main */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.toolbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#16213e;border-bottom:2px solid #0f3460;flex-shrink:0}
+.toolbar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#16213e;border-bottom:2px solid #0f3460;flex-shrink:0;flex-wrap:wrap;gap:6px}
 .toolbar .title{font-size:16px;font-weight:700;color:#e94560}
-.toolbar-actions{display:flex;gap:6px}
+.toolbar-actions{display:flex;gap:6px;align-items:center}
 .btn{padding:6px 14px;border:1px solid #0f3460;background:#1a1a2e;color:#ccc;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s}
 .btn:hover{background:#0f3460;color:#fff;border-color:#e94560}
 .progress-bar{display:flex;align-items:center;gap:6px;font-size:11px;color:#8899aa}
 .progress-track{width:100px;height:5px;background:#0f3460;border-radius:3px;overflow:hidden}
 .progress-fill{height:100%;background:#e94560;border-radius:3px;transition:width .3s}
+
+/* Room code badge */
+.room-badge{display:flex;align-items:center;gap:6px;background:#0f3460;padding:4px 10px;border-radius:5px;font-size:11px;color:#8899aa}
+.room-badge .room-id{color:#e94560;font-weight:700;font-size:13px;letter-spacing:1px}
+.room-badge .copy-btn{background:none;border:none;color:#8899aa;cursor:pointer;font-size:13px;padding:0 2px;transition:color .15s}
+.room-badge .copy-btn:hover{color:#e94560}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#2ecc71;flex-shrink:0;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 /* 3D Room */
 .room-container{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -88,14 +96,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e0e0e
   <div class="main">
     <div class="toolbar">
       <span class="title">Classroom Arrangement</span>
+      <div class="room-badge">
+        <span class="status-dot"></span>
+        Room: <span class="room-id" id="roomCode"></span>
+        <button class="copy-btn" id="copyBtn" title="Copy room link">&#128203;</button>
+      </div>
       <div class="progress-bar">
         <span id="progressText">0/0</span>
         <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
       </div>
       <div class="toolbar-actions">
-        <button class="btn" onclick="resetRoom()">Reset</button>
-        <button class="btn" onclick="saveLayout()">Save</button>
-        <button class="btn" onclick="loadLayout()">Load</button>
+        <button class="btn" id="resetBtn">Reset</button>
+        <button class="btn" id="shareBtn">Share</button>
       </div>
     </div>
     <div class="room-container">
@@ -109,19 +121,53 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#1a1a2e;color:#e0e0e
   </div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import { getDatabase, ref, push, set, remove, onChildAdded, onChildChanged, onChildRemoved } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+// ─── Firebase setup ───
+const firebaseConfig = {
+  apiKey: "AIzaSyCb7nwFpXnZnB3aEKv_xikJWCzvu60lov0",
+  authDomain: "nibal-room.firebaseapp.com",
+  databaseURL: "https://nibal-room-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "nibal-room",
+  storageBucket: "nibal-room.firebasestorage.app",
+  messagingSenderId: "766244539294",
+  appId: "1:766244539294:web:b72fc5df3054958d8de48f"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// ─── Room ID from URL hash ───
+function getRoomId() {
+  let id = location.hash.slice(1);
+  if (!id) {
+    id = Math.random().toString(36).substr(2, 6).toUpperCase();
+    location.hash = id;
+  }
+  return id;
+}
+const roomId = getRoomId();
+const itemsRef = ref(db, `rooms/${roomId}/items`);
+document.getElementById('roomCode').textContent = roomId;
+
+// Copy room link
+document.getElementById('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(location.href).then(() => toast('Link copied!'));
+});
+document.getElementById('shareBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(location.href).then(() => toast('Room link copied! Share it with others.'));
+});
+
 // ─── Room geometry (perspective) ───
 const W = 960, H = 580;
-// Vanishing point
 const VP = { x: W / 2, y: H * 0.30 };
-// Back wall corners (the rectangle we see head-on)
 const BW = {
   tl: { x: 170, y: 20 },
   tr: { x: 790, y: 20 },
   br: { x: 790, y: 175 },
   bl: { x: 170, y: 175 }
 };
-// Room front edges (viewport edges)
 const FR = {
   bl: { x: 0, y: H },
   br: { x: W, y: H },
@@ -135,15 +181,14 @@ function drawRoom() {
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, W, H);
 
-  // ── Back wall ──
+  // Back wall
   ctx.fillStyle = '#f0e0c0';
   ctx.fillRect(BW.tl.x, BW.tl.y, BW.tr.x - BW.tl.x, BW.bl.y - BW.tl.y);
-  // Wall border
   ctx.strokeStyle = '#c4a87a';
   ctx.lineWidth = 2;
   ctx.strokeRect(BW.tl.x, BW.tl.y, BW.tr.x - BW.tl.x, BW.bl.y - BW.tl.y);
 
-  // ── Floor ──
+  // Floor
   ctx.fillStyle = '#d4b896';
   ctx.beginPath();
   ctx.moveTo(BW.bl.x, BW.bl.y);
@@ -166,7 +211,6 @@ function drawRoom() {
     ctx.lineTo(botX, FR.bl.y);
     ctx.stroke();
   }
-  // Horizontal floor lines (depth)
   for (let i = 1; i <= 8; i++) {
     const t = i / 9;
     const y = BW.bl.y + t * (FR.bl.y - BW.bl.y);
@@ -178,7 +222,7 @@ function drawRoom() {
     ctx.stroke();
   }
 
-  // ── Left wall ──
+  // Left wall
   ctx.fillStyle = '#e8d5b5';
   ctx.beginPath();
   ctx.moveTo(BW.tl.x, BW.tl.y);
@@ -191,7 +235,7 @@ function drawRoom() {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // ── Right wall ──
+  // Right wall
   ctx.fillStyle = '#dcc9a5';
   ctx.beginPath();
   ctx.moveTo(BW.tr.x, BW.tr.y);
@@ -204,7 +248,7 @@ function drawRoom() {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // ── Ceiling ──
+  // Ceiling
   ctx.fillStyle = '#f5f0e8';
   ctx.beginPath();
   ctx.moveTo(BW.tl.x, BW.tl.y);
@@ -214,7 +258,7 @@ function drawRoom() {
   ctx.closePath();
   ctx.fill();
 
-  // ── Windows on back wall ──
+  // Windows on back wall
   const wallW = BW.tr.x - BW.tl.x;
   const wallH = BW.bl.y - BW.tl.y;
   for (let i = 0; i < 3; i++) {
@@ -222,17 +266,13 @@ function drawRoom() {
     const wy = BW.tl.y + wallH * 0.1;
     const ww = wallW * 0.2;
     const wh = wallH * 0.55;
-    // Window frame
     ctx.fillStyle = '#a0d8ef';
     ctx.fillRect(wx, wy, ww, wh);
-    // Glass shine
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.fillRect(wx + 2, wy + 2, ww * 0.45, wh - 4);
-    // Frame
     ctx.strokeStyle = '#8B7355';
     ctx.lineWidth = 3;
     ctx.strokeRect(wx, wy, ww, wh);
-    // Cross bar
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(wx + ww / 2, wy);
@@ -242,10 +282,8 @@ function drawRoom() {
     ctx.stroke();
   }
 
-  // ── Door on left wall ──
-  const dx = 30, dy = 60;
-  const dw = 55, dh = 110;
-  // Map to left wall perspective
+  // Door on left wall
+  const dh = 110;
   const dt = 0.3;
   const doorBL = { x: lerp(BW.bl.x, FR.bl.x, dt), y: lerp(BW.bl.y, FR.bl.y, dt) };
   const doorTL = { x: doorBL.x - 12, y: doorBL.y - dh };
@@ -264,22 +302,20 @@ function drawRoom() {
   ctx.strokeStyle = '#6b4f0e';
   ctx.lineWidth = 2;
   ctx.stroke();
-  // Door knob
   ctx.fillStyle = '#DAA520';
   ctx.beginPath();
   ctx.arc(doorTL.x + 8, (doorTL.y + doorBL.y) / 2, 3, 0, Math.PI * 2);
   ctx.fill();
 
-  // ── Baseboard ──
+  // Baseboard
   ctx.strokeStyle = '#a08050';
   ctx.lineWidth = 4;
-  // Back wall baseboard
   ctx.beginPath();
   ctx.moveTo(BW.bl.x, BW.bl.y);
   ctx.lineTo(BW.br.x, BW.br.y);
   ctx.stroke();
 
-  // ── Floor edge highlight ──
+  // Floor edge highlight
   ctx.strokeStyle = 'rgba(0,0,0,0.1)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -296,45 +332,46 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 
 // ─── Item definitions ───
 const ITEMS = [
-  { id:'round-table',    name:'Round Table',      icon:'🟤',qty:2, zone:'floor',w:60,h:50 },
-  { id:'rect-table',     name:'Rect. Table',      icon:'🟫',qty:2, zone:'floor',w:80,h:45 },
-  { id:'chair',          name:'Chair',             icon:'🪑',qty:20,zone:'floor',w:28,h:34 },
-  { id:'carpet',         name:'Carpet',            icon:'🟪',qty:4, zone:'floor',w:90,h:50 },
-  { id:'cabinet',        name:'Cabinet',           icon:'🗄️',qty:1, zone:'floor',w:55,h:50 },
-  { id:'poster',         name:'Wall Poster',       icon:'📋',qty:4, zone:'wall', w:65,h:45 },
-  { id:'reading-cabinet',name:'Reading Cabinet',   icon:'📚',qty:3, zone:'floor',w:65,h:55 },
-  { id:'laptop',         name:'IT Corner',         icon:'💻',qty:1, zone:'floor',w:32,h:26 },
-  { id:'building-box',   name:'Toy Land',          icon:'🧱',qty:1, zone:'floor',w:48,h:40 },
-  { id:'minimarket',     name:'Mini Market',       icon:'🏪',qty:1, zone:'floor',w:75,h:60 },
-  { id:'reading-tent',   name:'Reading Tent',      icon:'⛺',qty:1, zone:'floor',w:70,h:65 },
-  { id:'science-kit',    name:'Science Studio',    icon:'🔬',qty:1, zone:'floor',w:45,h:38 },
-  { id:'clock',          name:'Clock',             icon:'🕐',qty:1, zone:'wall', w:36,h:36 },
-  { id:'art-kit',        name:'Art Studio',        icon:'🎨',qty:1, zone:'floor',w:45,h:38 },
-  { id:'flipchart',      name:'Flipchart',         icon:'📊',qty:1, zone:'floor',w:45,h:55 },
-  { id:'drama-center',   name:'Drama Center',      icon:'🎭',qty:1, zone:'floor',w:70,h:55 },
-  { id:'interactive-panel',name:'Interactive Panel',icon:'📺',qty:1, zone:'wall', w:90,h:55 },
-  { id:'math-corner',    name:'Math Corner',       icon:'🔢',qty:1, zone:'floor',w:70,h:55 },
-  { id:'others',         name:'Others',            icon:'📦',qty:1, zone:'floor',w:70,h:55 },
-  { id:'makerspace',     name:'Makerspace',        icon:'🔧',qty:1, zone:'floor',w:80,h:60 },
-  { id:'media-lab',      name:'Media Lab',         icon:'🎬',qty:1, zone:'floor',w:80,h:60 },
+  { id:'round-table',    name:'Round Table',      icon:'\u{1F7E4}',qty:2, zone:'floor',w:60,h:50 },
+  { id:'rect-table',     name:'Rect. Table',      icon:'\u{1F7EB}',qty:2, zone:'floor',w:80,h:45 },
+  { id:'chair',          name:'Chair',             icon:'\u{1FA91}',qty:20,zone:'floor',w:28,h:34 },
+  { id:'carpet',         name:'Carpet',            icon:'\u{1F7EA}',qty:4, zone:'floor',w:90,h:50 },
+  { id:'cabinet',        name:'Cabinet',           icon:'\u{1F5C4}\u{FE0F}',qty:1, zone:'floor',w:55,h:50 },
+  { id:'poster',         name:'Wall Poster',       icon:'\u{1F4CB}',qty:4, zone:'wall', w:65,h:45 },
+  { id:'reading-cabinet',name:'Reading Cabinet',   icon:'\u{1F4DA}',qty:3, zone:'floor',w:65,h:55 },
+  { id:'laptop',         name:'IT Corner',         icon:'\u{1F4BB}',qty:1, zone:'floor',w:32,h:26 },
+  { id:'building-box',   name:'Toy Land',          icon:'\u{1F9F1}',qty:1, zone:'floor',w:48,h:40 },
+  { id:'minimarket',     name:'Mini Market',       icon:'\u{1F3EA}',qty:1, zone:'floor',w:75,h:60 },
+  { id:'reading-tent',   name:'Reading Tent',      icon:'\u26FA',qty:1, zone:'floor',w:70,h:65 },
+  { id:'science-kit',    name:'Science Studio',    icon:'\u{1F52C}',qty:1, zone:'floor',w:45,h:38 },
+  { id:'clock',          name:'Clock',             icon:'\u{1F550}',qty:1, zone:'wall', w:36,h:36 },
+  { id:'art-kit',        name:'Art Studio',        icon:'\u{1F3A8}',qty:1, zone:'floor',w:45,h:38 },
+  { id:'flipchart',      name:'Flipchart',         icon:'\u{1F4CA}',qty:1, zone:'floor',w:45,h:55 },
+  { id:'drama-center',   name:'Drama Center',      icon:'\u{1F3AD}',qty:1, zone:'floor',w:70,h:55 },
+  { id:'interactive-panel',name:'Interactive Panel',icon:'\u{1F4FA}',qty:1, zone:'wall', w:90,h:55 },
+  { id:'math-corner',    name:'Math Corner',       icon:'\u{1F522}',qty:1, zone:'floor',w:70,h:55 },
+  { id:'others',         name:'Others',            icon:'\u{1F4E6}',qty:1, zone:'floor',w:70,h:55 },
+  { id:'makerspace',     name:'Makerspace',        icon:'\u{1F527}',qty:1, zone:'floor',w:80,h:60 },
+  { id:'media-lab',      name:'Media Lab',         icon:'\u{1F3AC}',qty:1, zone:'floor',w:80,h:60 },
 ];
 
 let placedCounts = {};
-let nextUid = 1;
 ITEMS.forEach(i => placedCounts[i.id] = 0);
+
+// Map firebase keys to DOM elements
+const fbElements = {};
 
 const scene = document.getElementById('scene');
 const dropFloor = document.getElementById('dropFloor');
 const dropWall = document.getElementById('dropWall');
 
 // ─── Depth-based scaling for floor items ───
-// Y goes from BW.bl.y (back, depth=0) to H (front, depth=1)
 function depthFromY(y) {
   return Math.max(0, Math.min(1, (y - BW.bl.y) / (H - BW.bl.y)));
 }
 
 function scaleFromDepth(d) {
-  return 0.45 + d * 0.75; // 0.45 at back wall, 1.2 at front
+  return 0.45 + d * 0.75;
 }
 
 function applyDepthScale(el) {
@@ -559,13 +596,12 @@ function onDragStart(e) {
   if (!def) return;
   dragInfo = def;
   e.dataTransfer.effectAllowed = 'copy';
-  // Tiny transparent image so browser doesn't show ugly ghost
   const img = document.createElement('canvas');
   img.width = 1; img.height = 1;
   e.dataTransfer.setDragImage(img, 0, 0);
 }
 
-// Drop on floor
+// Drop on floor — push to Firebase
 dropFloor.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 dropFloor.addEventListener('drop', e => {
   e.preventDefault();
@@ -578,10 +614,12 @@ dropFloor.addEventListener('drop', e => {
   const sy = scene.offsetHeight / rect.height;
   const x = (e.clientX - rect.left) * sx;
   const y = (e.clientY - rect.top) * sy;
-  placeItem(def, x, y, 'floor');
+  // Write to Firebase — the listener will create the DOM element
+  const newRef = push(itemsRef);
+  set(newRef, { itemId: def.id, x: x - def.w / 2, y: y - def.h / 2, zone: 'floor' });
 });
 
-// Drop on wall
+// Drop on wall — push to Firebase
 dropWall.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 dropWall.addEventListener('drop', e => {
   e.preventDefault();
@@ -594,46 +632,46 @@ dropWall.addEventListener('drop', e => {
   const sy = scene.offsetHeight / rect.height;
   const x = (e.clientX - rect.left) * sx;
   const y = (e.clientY - rect.top) * sy;
-  placeItem(def, x, y, 'wall');
+  const newRef = push(itemsRef);
+  set(newRef, { itemId: def.id, x: x - def.w / 2, y: y - def.h / 2, zone: 'wall' });
 });
 
 document.addEventListener('dragend', () => { dragInfo = null; });
 
-// ─── Place item ───
-function placeItem(def, x, y, zone, skipCount) {
-  const uid = nextUid++;
+// ─── Create DOM element for an item (called by Firebase listeners) ───
+function createRoomElement(def, x, y, zone, fbKey) {
   const el = document.createElement('div');
   el.className = 'room-item';
-  el.dataset.uid = uid;
+  el.dataset.fbKey = fbKey;
   el.dataset.itemId = def.id;
   el.dataset.zone = zone;
   el.dataset.baseW = def.w;
   el.dataset.baseH = def.h;
   el.style.width = def.w + 'px';
   el.style.height = def.h + 'px';
-  el.style.left = (x - def.w / 2) + 'px';
-  el.style.top = (y - def.h / 2) + 'px';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
 
   el.innerHTML = `<div style="width:100%;height:100%;pointer-events:none">${drawItem(def)}</div><button class="delete-btn" title="Remove">&times;</button>`;
 
   el.querySelector('.delete-btn').addEventListener('mousedown', e => {
     e.stopPropagation();
-    removeItem(el);
+    // Delete from Firebase — listener handles DOM removal
+    remove(ref(db, `rooms/${roomId}/items/${fbKey}`));
   });
 
   el.addEventListener('contextmenu', e => { e.preventDefault(); showCtx(e, el); });
 
   if (zone === 'floor') applyDepthScale(el);
-  else el.style.zIndex = 8; // wall items behind floor items
+  else el.style.zIndex = 8;
 
   setupDrag(el);
   scene.appendChild(el);
+  fbElements[fbKey] = el;
 
-  if (!skipCount) {
-    placedCounts[def.id] = (placedCounts[def.id]||0) + 1;
-    buildSidebar();
-    updateProgress();
-  }
+  placedCounts[def.id] = (placedCounts[def.id]||0) + 1;
+  buildSidebar();
+  updateProgress();
   return el;
 }
 
@@ -647,9 +685,6 @@ function setupDrag(el) {
     e.preventDefault();
     dragging = true;
     el.classList.add('dragging');
-    const rect = scene.getBoundingClientRect();
-    const scX = scene.offsetWidth / rect.width;
-    const scY = scene.offsetHeight / rect.height;
     sx = e.clientX; sy = e.clientY;
     ox = parseFloat(el.style.left); oy = parseFloat(el.style.top);
 
@@ -672,20 +707,21 @@ function setupDrag(el) {
       el.classList.remove('dragging');
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      // Sync final position to Firebase
+      const fbKey = el.dataset.fbKey;
+      if (fbKey) {
+        set(ref(db, `rooms/${roomId}/items/${fbKey}`), {
+          itemId: el.dataset.itemId,
+          x: parseFloat(el.style.left),
+          y: parseFloat(el.style.top),
+          zone: el.dataset.zone
+        });
+      }
     };
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
-}
-
-// ─── Remove ───
-function removeItem(el) {
-  const itemId = el.dataset.itemId;
-  el.remove();
-  placedCounts[itemId] = Math.max(0, (placedCounts[itemId]||0) - 1);
-  buildSidebar();
-  updateProgress();
 }
 
 // ─── Context menu ───
@@ -700,7 +736,10 @@ function showCtx(e, el) {
   m.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     if (b.dataset.a === 'front') el.style.zIndex = 150;
     else if (b.dataset.a === 'back') el.style.zIndex = 3;
-    else if (b.dataset.a === 'del') removeItem(el);
+    else if (b.dataset.a === 'del') {
+      const fbKey = el.dataset.fbKey;
+      if (fbKey) remove(ref(db, `rooms/${roomId}/items/${fbKey}`));
+    }
     closeCtx();
   }));
   document.body.appendChild(m);
@@ -709,38 +748,46 @@ function showCtx(e, el) {
 function closeCtx() { if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; } }
 document.addEventListener('click', closeCtx);
 
-// ─── Reset / Save / Load ───
-function resetRoom() {
-  scene.querySelectorAll('.room-item').forEach(e => e.remove());
-  ITEMS.forEach(i => placedCounts[i.id] = 0);
+// ─── Reset ───
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Reset the room for everyone?')) return;
+  set(ref(db, `rooms/${roomId}/items`), null);
+});
+
+// ─── Firebase listeners (real-time sync) ───
+onChildAdded(itemsRef, (snap) => {
+  const data = snap.val();
+  const fbKey = snap.key;
+  // Skip if we already have this element (e.g. from our own action)
+  if (fbElements[fbKey]) return;
+  const def = ITEMS.find(i => i.id === data.itemId);
+  if (!def) return;
+  createRoomElement(def, data.x, data.y, data.zone, fbKey);
+});
+
+onChildChanged(itemsRef, (snap) => {
+  const data = snap.val();
+  const fbKey = snap.key;
+  const el = fbElements[fbKey];
+  if (!el) return;
+  // Don't update if this element is currently being dragged locally
+  if (el.classList.contains('dragging')) return;
+  el.style.left = data.x + 'px';
+  el.style.top = data.y + 'px';
+  if (data.zone === 'floor') applyDepthScale(el);
+});
+
+onChildRemoved(itemsRef, (snap) => {
+  const fbKey = snap.key;
+  const el = fbElements[fbKey];
+  if (!el) return;
+  const itemId = el.dataset.itemId;
+  el.remove();
+  delete fbElements[fbKey];
+  placedCounts[itemId] = Math.max(0, (placedCounts[itemId]||0) - 1);
   buildSidebar();
   updateProgress();
-}
-
-function saveLayout() {
-  const data = [];
-  scene.querySelectorAll('.room-item').forEach(el => {
-    data.push({ itemId: el.dataset.itemId, x: parseFloat(el.style.left), y: parseFloat(el.style.top), zone: el.dataset.zone });
-  });
-  localStorage.setItem('classroom-3d', JSON.stringify(data));
-  toast('Layout saved!');
-}
-
-function loadLayout() {
-  const raw = localStorage.getItem('classroom-3d');
-  if (!raw) { toast('No saved layout'); return; }
-  resetRoom();
-  JSON.parse(raw).forEach(d => {
-    const def = ITEMS.find(i => i.id === d.itemId);
-    if (!def || def.qty - (placedCounts[def.id]||0) <= 0) return;
-    const w = def.w, h = def.h;
-    const el = placeItem(def, d.x + w/2, d.y + h/2, d.zone || 'floor');
-    el.style.left = d.x + 'px';
-    el.style.top = d.y + 'px';
-    if (el.dataset.zone === 'floor') applyDepthScale(el);
-  });
-  toast('Layout loaded!');
-}
+});
 
 function toast(msg) {
   const t = document.createElement('div');
